@@ -1,0 +1,379 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "id": "d7153421-5579-4276-a63a-83bcd8a81dd5",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Collecting scikit-surprise\n",
+      "  Using cached scikit_surprise-1.1.4.tar.gz (154 kB)\n",
+      "  Installing build dependencies: started\n",
+      "  Installing build dependencies: still running...\n",
+      "  Installing build dependencies: finished with status 'done'\n",
+      "  Getting requirements to build wheel: started\n",
+      "  Getting requirements to build wheel: finished with status 'done'\n",
+      "  Preparing metadata (pyproject.toml): started\n",
+      "  Preparing metadata (pyproject.toml): finished with status 'done'\n",
+      "Requirement already satisfied: joblib>=1.2.0 in c:\\users\\hp\\anaconda3\\lib\\site-packages (from scikit-surprise) (1.4.2)\n",
+      "Requirement already satisfied: numpy>=1.19.5 in c:\\users\\hp\\anaconda3\\lib\\site-packages (from scikit-surprise) (1.26.4)\n",
+      "Requirement already satisfied: scipy>=1.6.0 in c:\\users\\hp\\anaconda3\\lib\\site-packages (from scikit-surprise) (1.13.1)\n",
+      "Building wheels for collected packages: scikit-surprise\n",
+      "  Building wheel for scikit-surprise (pyproject.toml): started\n",
+      "  Building wheel for scikit-surprise (pyproject.toml): still running...\n",
+      "  Building wheel for scikit-surprise (pyproject.toml): finished with status 'done'\n",
+      "  Created wheel for scikit-surprise: filename=scikit_surprise-1.1.4-cp312-cp312-win_amd64.whl size=1288922 sha256=3f1c8d382d61bf801d0c546e50d577a56e786d97e9206a79ccc0e6ef450d7e8d\n",
+      "  Stored in directory: c:\\users\\hp\\appdata\\local\\pip\\cache\\wheels\\75\\fa\\bc\\739bc2cb1fbaab6061854e6cfbb81a0ae52c92a502a7fa454b\n",
+      "Successfully built scikit-surprise\n",
+      "Installing collected packages: scikit-surprise\n",
+      "Successfully installed scikit-surprise-1.1.4\n"
+     ]
+    }
+   ],
+   "source": [
+    "!pip install scikit-surprise"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "0347b80c-6f7b-4741-be5a-454865984c89",
+   "metadata": {},
+   "source": [
+    "**1. Préparation des données**"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "88a5df04-46eb-4468-81b4-44fa8c89d662",
+   "metadata": {},
+   "source": [
+    "**Fichiers nécessaires :**  \n",
+    "- `pois.csv` : Colonnes `ID, Place_Name, Lat, Long`  \n",
+    "- `ratings.csv` : Colonnes `user_id, ID, rating` (notes de sécurité)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "id": "d5141181-f0f1-40bb-8cd2-273e43edb433",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "   ID                  Place_Name        Lat      Long\n",
+      "0   1  Jardin_pub_ancien_Talborjt  30.427320 -9.613649\n",
+      "1   2             Jardin_Dikrayat  30.425532 -9.611122\n",
+      "2   3              Mssala_Ihchach  30.427142 -9.608285\n",
+      "3   4              Parking_Wilaya  30.421990 -9.604948\n",
+      "4   5         Rue_de_Paris_PLACE1  30.424987 -9.604443\n",
+      "   user_id  ID  rating\n",
+      "0        1   3     4.5\n",
+      "1        2   3     3.5\n",
+      "2        3   3     2.1\n",
+      "3        1   4     3.5\n",
+      "4        1   7     4.0\n"
+     ]
+    }
+   ],
+   "source": [
+    "import pandas as pd\n",
+    "import numpy as np\n",
+    "from scipy.spatial import KDTree\n",
+    "from surprise import Dataset, KNNBasic\n",
+    "\n",
+    "# Chargement des POIs\n",
+    "pois = pd.read_csv(\"pois.csv\")\n",
+    "print(pois.head())\n",
+    "\n",
+    "# Chargement des notes (exemple minimal)\n",
+    "ratings = pd.read_csv(\"ratings.csv\")\n",
+    "print(ratings.head())"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "1407a930-aaa3-4caf-840a-8063456c39b6",
+   "metadata": {},
+   "source": [
+    "**Étape 1 : Trouver les POIs les plus proches (KDTree)**"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "2cde50d3-c4a9-490f-9b09-1f0d00f9b936",
+   "metadata": {},
+   "source": [
+    "Calculez la distance entre l'utilisateur et tous les POIs."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 39,
+   "id": "cbabd391-a294-4e22-a531-bd0749606d33",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "    ID               Place_Name        Lat      Long  distance\n",
+      "3    4           Parking_Wilaya  30.421990 -9.604948  0.000003\n",
+      "68  69         Jardin_Belvedere  30.420528 -9.606165  0.001906\n",
+      "4    5      Rue_de_Paris_PLACE1  30.424987 -9.604443  0.003037\n",
+      "7    8  Rue_de_Stockholm_PLACE1  30.424570 -9.602984  0.003240\n",
+      "5    6     Rue_Echouhada_PLACE1  30.425052 -9.606654  0.003504\n"
+     ]
+    }
+   ],
+   "source": [
+    "def get_nearest_pois(user_lat, user_lon, k=5):\n",
+    "\n",
+    "    # Créer un KDTree pour une recherche rapide\n",
+    "\n",
+    "    coords = pois[[\"Lat\", \"Long\"]].values\n",
+    "\n",
+    "    kdtree = KDTree(coords)\n",
+    "\n",
+    "    \n",
+    "\n",
+    "    # Trouver les k POIs les plus proches\n",
+    "    # k est le nbr de pois à retourner\n",
+    "\n",
+    "    distances, indices = kdtree.query([user_lat, user_lon], k=k)\n",
+    "\n",
+    "    nearest_pois = pois.iloc[indices].copy()\n",
+    "\n",
+    "    nearest_pois[\"distance\"] = distances\n",
+    "\n",
+    "    return nearest_pois\n",
+    "\n",
+    "\n",
+    "\n",
+    "# Test : Position utilisateur (ex: Paris)\n",
+    "\n",
+    "nearest_pois = get_nearest_pois(30.421992,-9.604945, k=5)\n",
+    "\n",
+    "print(nearest_pois)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "6ffdc8b9-93cb-44ac-8891-537c4f7701f5",
+   "metadata": {},
+   "source": [
+    "**Étape 2: scoring de sécurité KNN collaboratif**"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "7f03a2ad-33e9-485f-b8d7-7b8f3c680c79",
+   "metadata": {},
+   "source": [
+    "Si un POI a une note prédite, utilisez-la. Sinon, donnez un score par défaut."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 41,
+   "id": "9c5add09-efe5-4c01-a376-23356346c0e3",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Computing the msd similarity matrix...\n",
+      "Done computing similarity matrix.\n",
+      "                 Place_Name  distance  safety_score\n",
+      "3            Parking_Wilaya  0.000003      3.832718\n",
+      "68         Jardin_Belvedere  0.001906      3.888235\n",
+      "4       Rue_de_Paris_PLACE1  0.003037      3.888235\n",
+      "7   Rue_de_Stockholm_PLACE1  0.003240      3.888235\n",
+      "5      Rue_Echouhada_PLACE1  0.003504      3.888235\n"
+     ]
+    }
+   ],
+   "source": [
+    "from surprise import Dataset, Reader, KNNBasic\n",
+    "\n",
+    "# Exemple : si tes notes vont de 1 à 5\n",
+    "\n",
+    "reader = Reader(rating_scale=(1, 5))\n",
+    "# Entraîner le KNN avec les notes existantes\n",
+    "def train_knn():\n",
+    "    # Charger les données de notation (ratings) au format Surprise\n",
+    "    data = Dataset.load_from_df(ratings, reader)\n",
+    "    \n",
+    "    # Initialiser l'algorithme KNN en mode item-item (comparaison entre POIs)\n",
+    "    algo = KNNBasic(sim_options={'user_based': False})\n",
+    "    \n",
+    "    # Entraîner le modèle sur l'ensemble des données\n",
+    "    algo.fit(data.build_full_trainset())\n",
+    "    \n",
+    "    # Retourner le modèle entraîné\n",
+    "    return algo\n",
+    "\n",
+    "# Entraîner et stocker le modèle KNN\n",
+    "knn = train_knn()\n",
+    "\n",
+    "\n",
+    "# Prédire un score de sécurité pour un POI donné\n",
+    "def get_safety_score(ID):\n",
+    "    try:\n",
+    "        # Prédire la note du POI pour un utilisateur fictif (uid=1)\n",
+    "        pred = knn.predict(uid=1, iid=ID)\n",
+    "        \n",
+    "        # Retourner la note prédite comme score de sécurité\n",
+    "        return pred.est\n",
+    "    except:\n",
+    "        # Si une erreur survient (ex. : POI inconnu), retourner un score par défaut\n",
+    "        return 3.0\n",
+    "\n",
+    "\n",
+    "# Calculer et ajouter le score de sécurité à chaque POI proche\n",
+    "nearest_pois[\"safety_score\"] = nearest_pois[\"ID\"].apply(get_safety_score)\n",
+    "\n",
+    "# Afficher les POIs avec leur nom, distance et score de sécurité\n",
+    "print(nearest_pois[[\"Place_Name\", \"distance\", \"safety_score\"]])"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "7dfd4b4a-f010-4455-94a3-cda46c9ad82c",
+   "metadata": {},
+   "source": [
+    "**Étape 3: combinaison Distance + score**"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "28249351-e40e-465c-8aa7-3818d91a6528",
+   "metadata": {},
+   "source": [
+    "Priorisez les POIs proches et bien notés avec un score hybride"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 45,
+   "id": "5de96713-e54a-43da-ad2b-b6a8852d03cc",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "                 Place_Name  distance  safety_score   hybrid_score\n",
+      "3            Parking_Wilaya  0.000003      3.832718  201962.624913\n",
+      "68         Jardin_Belvedere  0.001906      3.888235     368.457572\n",
+      "4       Rue_de_Paris_PLACE1  0.003037      3.888235     231.682694\n",
+      "7   Rue_de_Stockholm_PLACE1  0.003240      3.888235     217.244804\n",
+      "5      Rue_Echouhada_PLACE1  0.003504      3.888235     200.915382\n"
+     ]
+    }
+   ],
+   "source": [
+    "def hybrid_score(row, alpha=0.7):\n",
+    "    # alpha=0.7 : Poids de la distance (30% pour le score de sécurité)\n",
+    "    return (alpha * (1 / row[\"distance\"])) + ((1 - alpha) * row[\"safety_score\"])\n",
+    "\n",
+    "nearest_pois[\"hybrid_score\"] = nearest_pois.apply(hybrid_score, axis=1)\n",
+    "recommendation = nearest_pois.sort_values(\"hybrid_score\", ascending=False)\n",
+    "print(recommendation[[\"Place_Name\", \"distance\", \"safety_score\", \"hybrid_score\"]])"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "2bd8ca32-e276-4b55-bc56-1a0c5dd6689a",
+   "metadata": {},
+   "source": [
+    "**Résultat finale**"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "b7ffaef8-47fe-4a5b-bc12-13fa3f1a83ee",
+   "metadata": {},
+   "source": [
+    "**Input** :Position utilisateur (lat,lon)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "13d724d2-262e-4b9f-81b0-dab01636f961",
+   "metadata": {},
+   "source": [
+    "**output** :Liste des POIs recommendés triées par hybrid_score"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 55,
+   "id": "8ed7600f-1978-4203-bd7b-f6a33c42b460",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "    ID           Place_Name        Lat      Long  distance  safety_score  \\\n",
+      "3    4       Parking_Wilaya  30.421990 -9.604948  0.000003      3.832718   \n",
+      "68  69     Jardin_Belvedere  30.420528 -9.606165  0.001906      3.888235   \n",
+      "4    5  Rue_de_Paris_PLACE1  30.424987 -9.604443  0.003037      3.888235   \n",
+      "\n",
+      "     hybrid_score  \n",
+      "3   201962.624913  \n",
+      "68     368.457572  \n",
+      "4      231.682694  \n"
+     ]
+    }
+   ],
+   "source": [
+    "def recommend_safe_poi(user_lat, user_lon):\n",
+    "    nearest = get_nearest_pois(user_lat, user_lon, k=10)\n",
+    "    nearest[\"safety_score\"] = nearest[\"ID\"].apply(get_safety_score)\n",
+    "    nearest[\"hybrid_score\"] = nearest.apply(hybrid_score, axis=1)\n",
+    "    return nearest.sort_values(\"hybrid_score\", ascending=False)\n",
+    "\n",
+    "# Exemple :\n",
+    "recommendation = recommend_safe_poi(30.421992,-9.604945)\n",
+    "print(recommendation.head(3))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "166d0ea8-0f7f-410a-8528-d9af36dbf1e0",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python [conda env:base] *",
+   "language": "python",
+   "name": "conda-base-py"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.12.7"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
